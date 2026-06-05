@@ -1,0 +1,1159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WP Gutenberg Form Perf Test</title>
+  <style>
+    /* ================================================================
+       RESET & BASE
+    ================================================================ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #1e1e1e; color: #e0e0e0; font-size: 14px; }
+
+    /* ================================================================
+       LAYOUT: TOP TOOLBAR
+    ================================================================ */
+    #wp-toolbar {
+      position: fixed; top: 0; left: 0; right: 0; height: 46px;
+      background: #1d2327; border-bottom: 1px solid #3c434a;
+      display: flex; align-items: center; padding: 0 12px; gap: 12px; z-index: 100;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    }
+    #wp-toolbar .wp-logo {
+      width: 32px; height: 32px; background: #3858e9;
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-weight: 900; font-size: 16px; color: #fff; flex-shrink: 0; cursor: pointer;
+    }
+    #wp-toolbar .toolbar-sep { width: 1px; height: 24px; background: #3c434a; }
+    #wp-toolbar .toolbar-btn {
+      padding: 5px 12px; border-radius: 3px; border: 1px solid #3c434a;
+      background: #2c3338; color: #bbb; cursor: pointer; font-size: 12px;
+      transition: background 0.15s;
+    }
+    #wp-toolbar .toolbar-btn:hover { background: #3c434a; color: #fff; }
+    #wp-toolbar .toolbar-btn.primary {
+      background: #3858e9; border-color: #3858e9; color: #fff;
+    }
+    #wp-toolbar .toolbar-btn.primary:hover { background: #2145e6; }
+    #wp-toolbar .post-title-input {
+      flex: 1; max-width: 320px; background: #2c3338; border: 1px solid #3c434a;
+      color: #e0e0e0; padding: 5px 10px; border-radius: 3px; font-size: 13px;
+    }
+    #wp-toolbar .toolbar-right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+    #wp-toolbar .toolbar-avatar {
+      width: 28px; height: 28px; border-radius: 50%; background: #7c3aed;
+      display: flex; align-items: center; justify-content: center; font-size: 12px; color: #fff;
+    }
+
+    /* ================================================================
+       LAYOUT: SIDEBAR
+    ================================================================ */
+    #wp-sidebar {
+      position: fixed; top: 46px; left: 0; bottom: 0; width: 160px;
+      background: #1d2327; border-right: 1px solid #2c3338;
+      overflow-y: auto; z-index: 90; padding-top: 8px;
+    }
+    .sidebar-section-label {
+      font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+      color: #6b7280; padding: 8px 16px 4px; font-weight: 600;
+    }
+    .sidebar-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 16px; color: #c3c4c7; cursor: pointer; font-size: 12.5px;
+      transition: background 0.1s; border-radius: 0;
+    }
+    .sidebar-item:hover { background: #2c3338; color: #fff; }
+    .sidebar-item.active { background: #2c3338; color: #72aee6; border-left: 3px solid #72aee6; padding-left: 13px; }
+    .sidebar-item .icon { font-size: 14px; width: 16px; text-align: center; }
+    .sidebar-badge {
+      margin-left: auto; background: #3858e9; color: #fff;
+      border-radius: 10px; font-size: 10px; padding: 1px 6px; font-weight: 700;
+    }
+
+    /* ================================================================
+       LAYOUT: MAIN CONTENT AREA
+    ================================================================ */
+    #main-content {
+      margin-top: 46px; margin-left: 160px; margin-right: 0;
+      min-height: calc(100vh - 46px); background: #f0f0f1;
+      display: flex; flex-direction: column; align-items: center;
+      padding: 24px 16px 80px;
+    }
+
+    /* ================================================================
+       EDITOR CANVAS
+    ================================================================ */
+    #editor-canvas {
+      width: 100%; max-width: 780px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .canvas-post-title {
+      width: 100%; background: #fff; border-radius: 4px;
+      padding: 20px 24px; font-size: 22px; font-weight: 700; color: #1d2327;
+      border: 2px solid transparent; outline: none;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .canvas-post-title:focus { border-color: #72aee6; }
+
+    /* ================================================================
+       WIDGET BLOCKS
+    ================================================================ */
+    .wp-block {
+      background: #fff; border-radius: 4px;
+      border: 1px solid #e0e0e0;
+      padding: 16px 20px 18px;
+      position: relative;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      /* fade-in animation */
+      animation: blockFadeIn 0.35s ease both;
+    }
+    @keyframes blockFadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .wp-block:hover { border-color: #a7aaad; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .block-type-label {
+      position: absolute; top: 8px; right: 12px;
+      font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px;
+      color: #a7aaad; font-weight: 600;
+    }
+    .block-title {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.8px; color: #3858e9; margin-bottom: 12px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .block-title .block-icon { font-size: 14px; }
+
+    /* Form field styles inside blocks */
+    .field-group { margin-bottom: 10px; }
+    .field-group:last-child { margin-bottom: 0; }
+    .field-label {
+      display: block; font-size: 11.5px; font-weight: 600;
+      color: #3c434a; margin-bottom: 4px;
+    }
+    .field-label .required { color: #d63638; margin-left: 2px; }
+    .wp-input, .wp-textarea, .wp-select {
+      width: 100%; padding: 7px 10px; border: 1px solid #c3c4c7;
+      border-radius: 3px; font-size: 13px; color: #1d2327;
+      background: #fff; transition: border-color 0.15s, box-shadow 0.15s;
+      font-family: inherit;
+    }
+    .wp-input:focus, .wp-textarea:focus, .wp-select:focus {
+      outline: none; border-color: #72aee6;
+      box-shadow: 0 0 0 2px rgba(114,174,230,0.25);
+    }
+    .wp-textarea { resize: vertical; min-height: 80px; }
+    .wp-input[type="color"] { padding: 2px 4px; height: 34px; cursor: pointer; }
+    .wp-input[type="range"] { padding: 0; border: none; background: transparent; cursor: pointer; }
+    .wp-input[type="checkbox"], .wp-input[type="radio"] {
+      width: auto; padding: 0; margin-right: 6px; accent-color: #3858e9;
+    }
+    .inline-fields { display: flex; gap: 10px; }
+    .inline-fields .field-group { flex: 1; }
+    .checkbox-row, .radio-row {
+      display: flex; align-items: center; padding: 4px 0; cursor: pointer;
+    }
+    .checkbox-row label, .radio-row label {
+      cursor: pointer; font-size: 13px; color: #1d2327;
+    }
+    .checkbox-row input, .radio-row input { margin-top: 0; }
+    .repeater-row {
+      display: flex; gap: 8px; padding: 8px; background: #f6f7f7;
+      border-radius: 3px; margin-bottom: 6px; border: 1px solid #e0e0e0;
+    }
+    .repeater-row .wp-input { font-size: 12px; padding: 5px 8px; }
+    .gallery-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+    }
+    .gallery-grid .wp-input { font-size: 11px; padding: 5px 8px; }
+    .range-pair { display: flex; gap: 10px; align-items: center; }
+    .range-pair input[type="number"] { width: 80px; flex-shrink: 0; }
+    .range-pair input[type="range"] { flex: 1; }
+    .color-pair { display: flex; gap: 8px; align-items: center; }
+    .color-pair input[type="color"] { width: 50px; flex-shrink: 0; }
+    .color-pair input[type="text"] { flex: 1; }
+    .hidden-fields-note {
+      font-size: 11px; color: #a7aaad; font-style: italic; padding: 4px 0;
+    }
+
+    /* ================================================================
+       HUD PANEL (top-right, always visible)
+    ================================================================ */
+    #hud {
+      position: fixed; top: 54px; right: 12px; z-index: 200;
+      background: #1d2327; border: 1px solid #3c434a;
+      border-radius: 6px; min-width: 230px; max-width: 260px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+      font-size: 12px;
+    }
+    #hud-header {
+      background: #2c3338; padding: 8px 12px;
+      border-radius: 6px 6px 0 0;
+      display: flex; align-items: center; gap: 6px;
+      border-bottom: 1px solid #3c434a; cursor: pointer;
+    }
+    #hud-header .hud-title { font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: #72aee6; }
+    #hud-status { margin-left: auto; font-size: 13px; }
+    #hud-body { padding: 10px 12px; }
+    .hud-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 3px 0; border-bottom: 1px solid #2c3338;
+    }
+    .hud-row:last-child { border-bottom: none; }
+    .hud-label { color: #9ca3af; font-size: 11px; }
+    .hud-value { font-weight: 700; color: #e0e0e0; font-size: 12px; font-variant-numeric: tabular-nums; }
+    .hud-value.highlight { color: #72aee6; }
+    #hud-controls { padding: 8px 12px 10px; display: flex; gap: 6px; border-top: 1px solid #2c3338; }
+    .hud-btn {
+      flex: 1; padding: 5px 8px; border-radius: 4px; border: 1px solid #3c434a;
+      background: #2c3338; color: #c3c4c7; cursor: pointer; font-size: 11px; font-weight: 600;
+      transition: background 0.15s;
+    }
+    .hud-btn:hover { background: #3c434a; color: #fff; }
+    .hud-btn.pause-btn { background: #1a3a1a; border-color: #22c55e; color: #22c55e; }
+    .hud-btn.pause-btn:hover { background: #14532d; }
+    .hud-btn.pause-btn.paused { background: #3a1a00; border-color: #f59e0b; color: #f59e0b; }
+    .hud-btn.reset-btn { background: #3a1a1a; border-color: #d63638; color: #d63638; }
+    .hud-btn.reset-btn:hover { background: #5a2020; }
+    #hud-log {
+      max-height: 80px; overflow-y: auto; padding: 6px 12px;
+      border-top: 1px solid #2c3338; font-size: 10px; color: #6b7280;
+    }
+    .log-entry { padding: 1px 0; border-bottom: 1px dotted #2c3338; }
+    .log-entry:last-child { border-bottom: none; }
+    .log-round { color: #72aee6; font-weight: 700; }
+
+    /* ================================================================
+       ROUND INDICATOR FLASH
+    ================================================================ */
+    #round-flash {
+      position: fixed; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(56,88,233,0.9); color: #fff;
+      padding: 12px 28px; border-radius: 6px; font-size: 18px; font-weight: 700;
+      pointer-events: none; opacity: 0; transition: opacity 0.2s;
+      z-index: 500;
+    }
+
+    /* ================================================================
+       DONE BANNER
+    ================================================================ */
+    #done-banner {
+      display: none;
+      background: #fff; border: 2px solid #22c55e; border-radius: 6px;
+      padding: 20px 24px; text-align: center; color: #1d2327;
+      max-width: 780px; width: 100%; margin-top: 4px;
+    }
+    #done-banner h2 { color: #16a34a; margin-bottom: 8px; }
+    #done-banner .summary-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px;
+    }
+    .summary-stat {
+      background: #f6f7f7; border-radius: 4px; padding: 10px;
+      border: 1px solid #e0e0e0;
+    }
+    .summary-stat .s-val { font-size: 22px; font-weight: 800; color: #3858e9; }
+    .summary-stat .s-label { font-size: 11px; color: #6b7280; margin-top: 2px; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #1d2327; }
+    ::-webkit-scrollbar-thumb { background: #3c434a; border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<!-- ================================================================
+     TOP TOOLBAR
+================================================================ -->
+<div id="wp-toolbar">
+  <div class="wp-logo">W</div>
+  <div class="toolbar-sep"></div>
+  <button class="toolbar-btn">&#9664; Dashboard</button>
+  <div class="toolbar-sep"></div>
+  <input class="post-title-input" type="text" value="Sample Post — Perf Test" placeholder="Post title" />
+  <div class="toolbar-right">
+    <button class="toolbar-btn">Preview</button>
+    <button class="toolbar-btn">Save Draft</button>
+    <button class="toolbar-btn primary">Update</button>
+    <div class="toolbar-avatar">A</div>
+  </div>
+</div>
+
+<!-- ================================================================
+     LEFT SIDEBAR
+================================================================ -->
+<div id="wp-sidebar">
+  <div class="sidebar-section-label">Navigation</div>
+  <div class="sidebar-item active"><span class="icon">📊</span> Dashboard</div>
+  <div class="sidebar-item"><span class="icon">📝</span> Posts <span class="sidebar-badge">12</span></div>
+  <div class="sidebar-item"><span class="icon">📄</span> Pages</div>
+  <div class="sidebar-item"><span class="icon">🖼</span> Media</div>
+  <div class="sidebar-item"><span class="icon">💬</span> Comments <span class="sidebar-badge">3</span></div>
+
+  <div class="sidebar-section-label">Appearance</div>
+  <div class="sidebar-item"><span class="icon">🎨</span> Themes</div>
+  <div class="sidebar-item"><span class="icon">🧩</span> Plugins</div>
+  <div class="sidebar-item"><span class="icon">👤</span> Users</div>
+
+  <div class="sidebar-section-label">Settings</div>
+  <div class="sidebar-item"><span class="icon">⚙</span> General</div>
+  <div class="sidebar-item"><span class="icon">✍</span> Writing</div>
+  <div class="sidebar-item"><span class="icon">📖</span> Reading</div>
+  <div class="sidebar-item"><span class="icon">🔗</span> Permalinks</div>
+  <div class="sidebar-item"><span class="icon">🔒</span> Privacy</div>
+
+  <div class="sidebar-section-label">WooCommerce</div>
+  <div class="sidebar-item"><span class="icon">🛒</span> Orders <span class="sidebar-badge">7</span></div>
+  <div class="sidebar-item"><span class="icon">📦</span> Products</div>
+  <div class="sidebar-item"><span class="icon">📈</span> Analytics</div>
+</div>
+
+<!-- ================================================================
+     MAIN CONTENT / EDITOR CANVAS
+================================================================ -->
+<div id="main-content">
+  <div id="editor-canvas">
+    <!-- Static starter block (post title) -->
+    <input class="canvas-post-title" type="text"
+           id="post-title" name="post_title"
+           value="Sample Post — Gutenberg Perf Test"
+           placeholder="Add title" />
+    <!-- Widget blocks will be injected here by JS -->
+  </div>
+
+  <!-- Done banner (shown at end) -->
+  <div id="done-banner">
+    <h2>✅ Simulation Complete</h2>
+    <p>All rounds finished. The DOM is fully loaded with widget blocks.</p>
+    <div class="summary-grid">
+      <div class="summary-stat">
+        <div class="s-val" id="sum-blocks">—</div>
+        <div class="s-label">Total Blocks</div>
+      </div>
+      <div class="summary-stat">
+        <div class="s-val" id="sum-inputs">—</div>
+        <div class="s-label">Total Input Fields</div>
+      </div>
+      <div class="summary-stat">
+        <div class="s-val" id="sum-time">—</div>
+        <div class="s-label">Elapsed (s)</div>
+      </div>
+      <div class="summary-stat">
+        <div class="s-val" id="sum-rounds">—</div>
+        <div class="s-label">Rounds Run</div>
+      </div>
+      <div class="summary-stat">
+        <div class="s-val" id="sum-rate">—</div>
+        <div class="s-label">Inputs / Block</div>
+      </div>
+      <div class="summary-stat">
+        <div class="s-val" id="sum-fps">—</div>
+        <div class="s-label">Avg ms / Round</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================
+     HUD PANEL
+================================================================ -->
+<div id="hud">
+  <div id="hud-header">
+    <span>📡</span>
+    <span class="hud-title">Perf Monitor</span>
+    <span id="hud-status">🟢</span>
+  </div>
+  <div id="hud-body">
+    <div class="hud-row">
+      <span class="hud-label">Total Inputs in DOM</span>
+      <span class="hud-value highlight" id="m-total-inputs">1</span>
+    </div>
+    <div class="hud-row">
+      <span class="hud-label">Total Blocks Loaded</span>
+      <span class="hud-value" id="m-total-blocks">0</span>
+    </div>
+    <div class="hud-row">
+      <span class="hud-label">Round</span>
+      <span class="hud-value" id="m-round">0 / 50</span>
+    </div>
+    <div class="hud-row">
+      <span class="hud-label">Elapsed</span>
+      <span class="hud-value" id="m-elapsed">0.0s</span>
+    </div>
+    <div class="hud-row">
+      <span class="hud-label">Inputs This Round</span>
+      <span class="hud-value" id="m-this-round">—</span>
+    </div>
+    <div class="hud-row">
+      <span class="hud-label">Avg Interval</span>
+      <span class="hud-value" id="m-avg-interval">—</span>
+    </div>
+  </div>
+  <div id="hud-controls">
+    <button class="hud-btn pause-btn" id="btn-pause">⏸ Pause</button>
+    <button class="hud-btn reset-btn" id="btn-reset">↺ Reset</button>
+  </div>
+  <div id="hud-log"></div>
+</div>
+
+<!-- Round flash overlay -->
+<div id="round-flash"></div>
+
+<script>
+/* ================================================================
+   WP GUTENBERG FORM PERF TEST — WIDGET BLOCK GENERATORS
+   Each function receives a blockIndex (integer) and returns
+   a fully formed .wp-block DOM element with realistic inputs.
+================================================================ */
+
+'use strict';
+
+// ----------------------------------------------------------------
+// Helpers
+// ----------------------------------------------------------------
+
+/** Wrap block content in a .wp-block div with a type label */
+function makeBlock(typeLabel, iconChar, innerHTML) {
+  const block = document.createElement('div');
+  block.className = 'wp-block';
+  block.setAttribute('data-block-type', typeLabel);
+  block.innerHTML = `
+    <span class="block-type-label">${typeLabel}</span>
+    <div class="block-title"><span class="block-icon">${iconChar}</span>${typeLabel}</div>
+    ${innerHTML}
+  `;
+  return block;
+}
+
+/** Build a single field group (label + input) */
+function fieldGroup(labelText, inputHTML, required = false) {
+  return `<div class="field-group">
+    <label class="field-label">${labelText}${required ? '<span class="required">*</span>' : ''}</label>
+    ${inputHTML}
+  </div>`;
+}
+
+function inp(type, id, name, placeholder, value = '', extra = '') {
+  return `<input class="wp-input" type="${type}" id="${id}" name="${name}" placeholder="${placeholder}" value="${value}" ${extra} />`;
+}
+function textarea(id, name, placeholder, value = '') {
+  return `<textarea class="wp-textarea" id="${id}" name="${name}" placeholder="${placeholder}">${value}</textarea>`;
+}
+function select(id, name, options) {
+  const opts = options.map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+  return `<select class="wp-select" id="${id}" name="${name}">${opts}</select>`;
+}
+
+// ----------------------------------------------------------------
+// 1. Text Widget (title / slug / caption)
+// ----------------------------------------------------------------
+function makeTextWidget(bi) {
+  const variants = [
+    ['post_title',   'block-'+bi+'-title',   'Post Title',   'Enter post title…'],
+    ['post_slug',    'block-'+bi+'-slug',    'Post Slug',    'my-post-slug'],
+    ['post_caption', 'block-'+bi+'-caption', 'Caption',      'Describe the image…'],
+    ['link_text',    'block-'+bi+'-link',    'Link Text',    'Click here'],
+    ['heading_text', 'block-'+bi+'-heading', 'Heading Text', 'Section Heading'],
+  ];
+  const v = variants[bi % variants.length];
+  return makeBlock('Text Widget', '📝',
+    fieldGroup(v[2], inp('text', v[1], v[0], v[3]), true)
+  );
+}
+
+// ----------------------------------------------------------------
+// 2. Textarea Widget (content / excerpt / custom HTML)
+// ----------------------------------------------------------------
+function makeTextareaWidget(bi) {
+  const variants = [
+    ['post_content', 'block-'+bi+'-content', 'Post Content', 'Write your post content here…'],
+    ['post_excerpt', 'block-'+bi+'-excerpt', 'Excerpt',       'Short summary…'],
+    ['custom_html',  'block-'+bi+'-html',    'Custom HTML',   '<!-- Enter HTML code -->'],
+    ['post_notes',   'block-'+bi+'-notes',   'Editor Notes',  'Internal notes…'],
+  ];
+  const v = variants[bi % variants.length];
+  return makeBlock('Textarea Widget', '📄',
+    fieldGroup(v[2], textarea(v[1], v[0], v[3]))
+  );
+}
+
+// ----------------------------------------------------------------
+// 3. Image Widget (URL + alt text)
+// ----------------------------------------------------------------
+function makeImageWidget(bi) {
+  return makeBlock('Image Widget', '🖼',
+    fieldGroup('Image URL', inp('url', 'block-'+bi+'-img-url', 'image_url', 'https://example.com/image.jpg'), true) +
+    fieldGroup('Alt Text',  inp('text', 'block-'+bi+'-alt',   'image_alt',  'Describe the image for accessibility'))
+  );
+}
+
+// ----------------------------------------------------------------
+// 4. Meta Fields Block (SEO / schema)
+// ----------------------------------------------------------------
+function makeMetaBlock(bi) {
+  return makeBlock('Meta Fields', '🔍',
+    fieldGroup('SEO Title',       inp('text', 'block-'+bi+'-seo-title',   'seo_title',       'SEO Page Title')) +
+    fieldGroup('Meta Description', inp('text', 'block-'+bi+'-meta-desc',  'meta_description','Brief description for search engines')) +
+    fieldGroup('Focus Keyword',   inp('text', 'block-'+bi+'-focus-kw',   'focus_keyword',   'primary keyword')) +
+    fieldGroup('Canonical URL',   inp('url',  'block-'+bi+'-canonical',  'canonical_url',   'https://example.com/page/')) +
+    (bi % 2 === 0 ? fieldGroup('OG Image URL', inp('url', 'block-'+bi+'-og-img', 'og_image', 'https://example.com/og.jpg')) : '')
+  );
+}
+
+// ----------------------------------------------------------------
+// 5. Gallery Widget (3–6 image URLs)
+// ----------------------------------------------------------------
+function makeGalleryWidget(bi) {
+  const count = 3 + (bi % 4);
+  let gridHTML = '<div class="gallery-grid">';
+  for (let i = 0; i < count; i++) {
+    gridHTML += inp('url', `block-${bi}-gal-${i}`, `gallery_image_${i}`, `Image ${i+1} URL`);
+  }
+  gridHTML += '</div>';
+  return makeBlock('Gallery Widget', '🗃',
+    `<div class="field-group"><label class="field-label">Gallery Images (${count})</label>${gridHTML}</div>`
+  );
+}
+
+// ----------------------------------------------------------------
+// 6. Toggle / Checkbox Block
+// ----------------------------------------------------------------
+function makeCheckboxBlock(bi) {
+  const items = [
+    ['featured',        'block-'+bi+'-feat',    'featured',      'Mark as Featured Post'],
+    ['sticky',          'block-'+bi+'-sticky',  'sticky_post',   'Sticky Post'],
+    ['comments_open',   'block-'+bi+'-comts',   'comment_status','Allow Comments'],
+    ['ping_status',     'block-'+bi+'-pings',   'ping_status',   'Allow Pingbacks'],
+    ['noindex',         'block-'+bi+'-noindex', 'seo_noindex',   'No-Index (hide from search)'],
+  ];
+  const count = 3 + (bi % 3);
+  let rows = '';
+  for (let i = 0; i < count; i++) {
+    const it = items[i % items.length];
+    rows += `<div class="checkbox-row">
+      <input class="wp-input" type="checkbox" id="${it[0]}-${bi}" name="${it[2]}" />
+      <label for="${it[0]}-${bi}">${it[3]}</label>
+    </div>`;
+  }
+  return makeBlock('Checkbox Block', '☑',
+    `<div class="field-group"><label class="field-label">Post Options</label>${rows}</div>`
+  );
+}
+
+// ----------------------------------------------------------------
+// 7. Select / Dropdown Block
+// ----------------------------------------------------------------
+function makeSelectBlock(bi) {
+  return makeBlock('Select Block', '▾',
+    fieldGroup('Post Status', select('block-'+bi+'-status', 'post_status', [
+      ['publish','Published'],['draft','Draft'],['pending','Pending Review'],
+      ['private','Private'],['future','Scheduled'],['trash','Trash']
+    ])) +
+    (bi % 2 === 0 ? fieldGroup('Post Format', select('block-'+bi+'-format', 'post_format', [
+      ['standard','Standard'],['aside','Aside'],['gallery','Gallery'],
+      ['link','Link'],['image','Image'],['video','Video'],['audio','Audio']
+    ])) : '')
+  );
+}
+
+// ----------------------------------------------------------------
+// 8. Number / Range Block
+// ----------------------------------------------------------------
+function makeNumberRangeBlock(bi) {
+  return makeBlock('Number / Range', '🔢',
+    `<div class="field-group">
+       <label class="field-label">Reading Time (minutes)</label>
+       <div class="range-pair">
+         ${inp('number', 'block-'+bi+'-read-num', 'reading_time', '5', '5', 'min="1" max="60"')}
+         ${inp('range',  'block-'+bi+'-read-rng', 'reading_time_range', '', '5', 'min="1" max="60"')}
+       </div>
+     </div>
+     <div class="field-group">
+       <label class="field-label">Priority Score (0–100)</label>
+       <div class="range-pair">
+         ${inp('number', 'block-'+bi+'-pri-num', 'priority_score', '50', '50', 'min="0" max="100"')}
+         ${inp('range',  'block-'+bi+'-pri-rng', 'priority_score_range', '', '50', 'min="0" max="100"')}
+       </div>
+     </div>`
+  );
+}
+
+// ----------------------------------------------------------------
+// 9. Color Picker Block
+// ----------------------------------------------------------------
+function makeColorBlock(bi) {
+  const colors = ['#3858e9','#22c55e','#d63638','#f59e0b','#7c3aed','#0ea5e9'];
+  const def = colors[bi % colors.length];
+  return makeBlock('Color Picker', '🎨',
+    `<div class="field-group">
+       <label class="field-label">Primary Color</label>
+       <div class="color-pair">
+         ${inp('color', 'block-'+bi+'-color', 'primary_color', '', def)}
+         ${inp('text',  'block-'+bi+'-hex',   'primary_color_hex', '#RRGGBB', def)}
+       </div>
+     </div>
+     <div class="field-group">
+       <label class="field-label">Background Color</label>
+       <div class="color-pair">
+         ${inp('color', 'block-'+bi+'-bg-color', 'bg_color', '', '#ffffff')}
+         ${inp('text',  'block-'+bi+'-bg-hex',   'bg_color_hex', '#RRGGBB', '#ffffff')}
+       </div>
+     </div>`
+  );
+}
+
+// ----------------------------------------------------------------
+// 10. Date/Time Block
+// ----------------------------------------------------------------
+function makeDateTimeBlock(bi) {
+  return makeBlock('Date / Time', '📅',
+    fieldGroup('Publish Date', inp('date', 'block-'+bi+'-date', 'publish_date', '', '2024-01-15'), true) +
+    fieldGroup('Publish Time', inp('time', 'block-'+bi+'-time', 'publish_time', '', '09:00')) +
+    (bi % 2 === 0 ? fieldGroup('Expiry Date', inp('date', 'block-'+bi+'-exp', 'expiry_date', '', '')) : '')
+  );
+}
+
+// ----------------------------------------------------------------
+// 11. Radio Group Block
+// ----------------------------------------------------------------
+function makeRadioBlock(bi) {
+  const groups = [
+    { name: 'post_visibility', label: 'Visibility',    opts: ['Public','Private','Password Protected','Members Only'] },
+    { name: 'comment_policy',  label: 'Comment Policy',opts: ['Open','Closed','Moderated','Subscribers Only'] },
+    { name: 'layout_style',    label: 'Layout Style',  opts: ['Full Width','Boxed','Grid','Masonry','List'] },
+  ];
+  const g = groups[bi % groups.length];
+  const count = 3 + (bi % (g.opts.length - 2));
+  let rows = '';
+  for (let i = 0; i < count; i++) {
+    rows += `<div class="radio-row">
+      <input class="wp-input" type="radio" id="block-${bi}-radio-${i}" name="${g.name}_${bi}" value="${g.opts[i].toLowerCase().replace(/ /g,'_')}" ${i===0?'checked':''} />
+      <label for="block-${bi}-radio-${i}">${g.opts[i]}</label>
+    </div>`;
+  }
+  return makeBlock('Radio Group', '🔘',
+    `<div class="field-group"><label class="field-label">${g.label}</label>${rows}</div>`
+  );
+}
+
+// ----------------------------------------------------------------
+// 12. Hidden Fields Block (nonces, IDs, post meta)
+// ----------------------------------------------------------------
+function makeHiddenBlock(bi) {
+  const fields = [
+    ['_wpnonce',              `nonce-${bi}-wp`,  'abc123xyz' + bi],
+    ['_wp_http_referer',      `ref-${bi}`,       '/wp-admin/post.php'],
+    ['post_ID',               `pid-${bi}`,       String(1000 + bi)],
+    ['user_ID',               `uid-${bi}`,       '1'],
+    ['action',                `act-${bi}`,       'editpost'],
+    ['_edit_lock',            `lock-${bi}`,      `${Date.now()}:1`],
+    ['auto_draft',            `adraft-${bi}`,    '0'],
+    ['post_type',             `ptype-${bi}`,     'post'],
+  ];
+  const count = 4 + (bi % 5);
+  let hiddenInputs = '';
+  for (let i = 0; i < count; i++) {
+    const f = fields[i % fields.length];
+    hiddenInputs += `<input type="hidden" id="${f[1]}" name="${f[0]}" value="${f[2]}" />`;
+  }
+  return makeBlock('Hidden Fields', '🔒',
+    `<div class="field-group">
+       <p class="hidden-fields-note">⚡ ${count} hidden fields injected (nonces, IDs, action tokens)</p>
+       ${hiddenInputs}
+     </div>`
+  );
+}
+
+// ----------------------------------------------------------------
+// 13. Repeater Block (2 rows of text+url+checkbox)
+// ----------------------------------------------------------------
+function makeRepeaterBlock(bi) {
+  const rows = 2;
+  let rowsHTML = '';
+  for (let r = 0; r < rows; r++) {
+    rowsHTML += `<div class="repeater-row">
+      ${inp('text',     `block-${bi}-rep-${r}-text`, `repeater_${bi}_text_${r}`,  'Item title')}
+      ${inp('url',      `block-${bi}-rep-${r}-url`,  `repeater_${bi}_url_${r}`,   'https://')}
+      <input class="wp-input" type="checkbox" id="block-${bi}-rep-${r}-active"
+             name="repeater_${bi}_active_${r}" title="Active" style="width:auto;margin-top:6px;" />
+    </div>`;
+  }
+  return makeBlock('Repeater Block', '🔁',
+    `<div class="field-group">
+       <label class="field-label">Repeater Items</label>
+       ${rowsHTML}
+     </div>`
+  );
+}
+
+// ----------------------------------------------------------------
+// 14. Contact Form Block
+// ----------------------------------------------------------------
+function makeContactFormBlock(bi) {
+  return makeBlock('Contact Form', '📬',
+    fieldGroup('Full Name',     inp('text',  'block-'+bi+'-cf-name',  'cf_name',    'John Doe'), true) +
+    fieldGroup('Email Address', inp('email', 'block-'+bi+'-cf-email', 'cf_email',   'john@example.com'), true) +
+    fieldGroup('Phone Number',  inp('tel',   'block-'+bi+'-cf-phone', 'cf_phone',   '+1 (555) 000-0000')) +
+    fieldGroup('Subject',       inp('text',  'block-'+bi+'-cf-subj',  'cf_subject', 'Inquiry about…')) +
+    fieldGroup('Message',       textarea('block-'+bi+'-cf-msg', 'cf_message', 'Write your message here…'), true)
+  );
+}
+
+// ----------------------------------------------------------------
+// 15. WooCommerce Product Block
+// ----------------------------------------------------------------
+function makeWooBlock(bi) {
+  return makeBlock('WooCommerce Product', '🛒',
+    `<div class="inline-fields">
+       ${fieldGroup('SKU',        inp('text',   'block-'+bi+'-sku',    'product_sku',        'PROD-001'))}
+       ${fieldGroup('Stock Qty',  inp('number', 'block-'+bi+'-stock',  'product_stock',      '100', '100', 'min="0"'))}
+     </div>
+     <div class="inline-fields">
+       ${fieldGroup('Price ($)',      inp('number', 'block-'+bi+'-price',   'product_price',     '29.99', '29.99', 'step="0.01" min="0"'))}
+       ${fieldGroup('Sale Price ($)', inp('number', 'block-'+bi+'-sale',    'product_sale_price','', '',     'step="0.01" min="0"'))}
+     </div>
+     <div class="inline-fields">
+       ${fieldGroup('Weight (kg)', inp('number', 'block-'+bi+'-weight', 'product_weight', '0.5', '0.5', 'step="0.01"'))}
+       ${fieldGroup('Dimensions', inp('text', 'block-'+bi+'-dims', 'product_dimensions', 'L×W×H cm'))}
+     </div>
+     ${fieldGroup('Short Description', textarea('block-'+bi+'-woo-desc', 'product_short_desc', 'Brief product description…'))}`
+  );
+}
+
+// ----------------------------------------------------------------
+// Block type registry — maps type index → generator function
+// ----------------------------------------------------------------
+const BLOCK_GENERATORS = [
+  makeTextWidget,        //  0
+  makeTextareaWidget,    //  1
+  makeImageWidget,       //  2
+  makeMetaBlock,         //  3
+  makeGalleryWidget,     //  4
+  makeCheckboxBlock,     //  5
+  makeSelectBlock,       //  6
+  makeNumberRangeBlock,  //  7
+  makeColorBlock,        //  8
+  makeDateTimeBlock,     //  9
+  makeRadioBlock,        // 10
+  makeHiddenBlock,       // 11
+  makeRepeaterBlock,     // 12
+  makeContactFormBlock,  // 13
+  makeWooBlock,          // 14
+];
+
+/**
+ * Create a random block.
+ * @param {number} blockIndex - Global block counter (used for unique IDs)
+ * @param {number} [forceType] - Force a specific block type (0-14); random if omitted
+ * @returns {HTMLElement}
+ */
+function createRandomBlock(blockIndex, forceType) {
+  const typeIdx = (forceType !== undefined)
+    ? forceType
+    : Math.floor(Math.random() * BLOCK_GENERATORS.length);
+  return BLOCK_GENERATORS[typeIdx](blockIndex);
+}
+</script>
+<script>
+/* ================================================================
+   WP GUTENBERG FORM PERF TEST — SIMULATION ENGINE & HUD
+
+   Responsibilities:
+     - SimulationState: tracks all counters / timing
+     - runRound():      injects 1-4 blocks into #editor-canvas
+     - scheduleNext():  randomised setInterval + rAF scheduling
+     - HUD updater:     live metrics refresh every ~200ms
+     - Controls:        Pause/Resume, Reset
+     - Done handler:    shows summary banner
+================================================================ */
+
+'use strict';
+
+// ================================================================
+// Configuration (edit these to tune the test)
+// ================================================================
+const CONFIG = {
+  totalRounds:   50,     // How many injection rounds to run
+  minInterval:   300,    // Minimum ms between rounds
+  maxInterval:   600,    // Maximum ms between rounds
+  minBlocks:     1,      // Min blocks per round
+  maxBlocks:     4,      // Max blocks per round
+  hudRefreshMs:  200,    // HUD stats refresh interval (ms)
+  flashDuration: 500,    // Round flash overlay duration (ms)
+};
+
+// ================================================================
+// Simulation State
+// ================================================================
+const state = {
+  round:         0,
+  totalBlocks:   0,
+  blockIndex:    0,       // Monotonic block counter for unique IDs
+  paused:        false,
+  done:          false,
+  startTime:     null,
+  intervalId:    null,    // setInterval handle
+  hudIntervalId: null,    // HUD refresh handle
+  lastRoundMs:   0,       // timestamp of last round (for avg interval)
+  roundIntervals:[],      // array of measured intervals between rounds
+  roundLog:      [],      // [{round, blocks, inputs} …]
+};
+
+// ================================================================
+// DOM References
+// ================================================================
+const canvas      = document.getElementById('editor-canvas');
+const doneBanner  = document.getElementById('done-banner');
+const roundFlash  = document.getElementById('round-flash');
+const hudStatus   = document.getElementById('hud-status');
+const hudLog      = document.getElementById('hud-log');
+const btnPause    = document.getElementById('btn-pause');
+const btnReset    = document.getElementById('btn-reset');
+const mTotalInputs  = document.getElementById('m-total-inputs');
+const mTotalBlocks  = document.getElementById('m-total-blocks');
+const mRound        = document.getElementById('m-round');
+const mElapsed      = document.getElementById('m-elapsed');
+const mThisRound    = document.getElementById('m-this-round');
+const mAvgInterval  = document.getElementById('m-avg-interval');
+
+// ================================================================
+// Utilities
+// ================================================================
+
+/** Count all input/textarea/select elements in #editor-canvas */
+function countDomInputs() {
+  return canvas.querySelectorAll('input, textarea, select').length;
+}
+
+/** Random integer in [min, max] inclusive */
+function randInt(min, max) {
+  return min + Math.floor(Math.random() * (max - min + 1));
+}
+
+/** Show a brief flash overlay with a round label */
+function flashRound(roundNum) {
+  roundFlash.textContent = `Round ${roundNum}`;
+  roundFlash.style.opacity = '1';
+  setTimeout(() => { roundFlash.style.opacity = '0'; }, CONFIG.flashDuration);
+}
+
+/** Append an entry to the HUD log panel */
+function logEntry(text, cssClass = '') {
+  const div = document.createElement('div');
+  div.className = 'log-entry' + (cssClass ? ' ' + cssClass : '');
+  div.innerHTML = text;
+  hudLog.insertBefore(div, hudLog.firstChild); // newest on top
+  // Keep at most 30 log lines to avoid unbounded growth
+  while (hudLog.children.length > 30) {
+    hudLog.removeChild(hudLog.lastChild);
+  }
+}
+
+// ================================================================
+// Core: Run One Round
+// ================================================================
+
+/**
+ * Injects `count` random widget blocks into the editor canvas.
+ * Each block is created via createRandomBlock() (defined in widgets JS).
+ * Uses requestAnimationFrame to batch DOM writes cleanly.
+ *
+ * @param {number} count - Number of blocks to inject this round
+ */
+function injectBlocks(count) {
+  requestAnimationFrame(() => {
+    let inputsThisRound = 0;
+    for (let i = 0; i < count; i++) {
+      const block = createRandomBlock(state.blockIndex);
+      canvas.appendChild(block);
+      // Count inputs in this specific block only
+      inputsThisRound += block.querySelectorAll('input, textarea, select').length;
+      state.blockIndex++;
+      state.totalBlocks++;
+    }
+    return inputsThisRound; // Note: returned value used below via closure
+  });
+}
+
+/**
+ * Run a single simulation round:
+ *  1. Pick how many blocks to inject
+ *  2. Inject them
+ *  3. Update state
+ *  4. Log the round
+ *  5. Check if done
+ */
+function runRound() {
+  if (state.paused || state.done) return;
+
+  state.round++;
+  const blocksThisRound = randInt(CONFIG.minBlocks, CONFIG.maxBlocks);
+
+  // Measure interval from last round
+  const now = performance.now();
+  if (state.lastRoundMs > 0) {
+    state.roundIntervals.push(now - state.lastRoundMs);
+  }
+  state.lastRoundMs = now;
+
+  // Inject blocks into canvas via rAF
+  let inputsThisRound = 0;
+  requestAnimationFrame(() => {
+    for (let i = 0; i < blocksThisRound; i++) {
+      const block = createRandomBlock(state.blockIndex);
+      // Count inputs before appending (works because they're in the element's sub-tree)
+      inputsThisRound += block.querySelectorAll('input, textarea, select').length;
+      canvas.appendChild(block);
+      state.blockIndex++;
+      state.totalBlocks++;
+    }
+
+    // Log this round
+    state.roundLog.push({
+      round: state.round,
+      blocks: blocksThisRound,
+      inputs: inputsThisRound,
+    });
+
+    // Update HUD "this round" immediately
+    mThisRound.textContent = `+${blocksThisRound} blocks / +${inputsThisRound} inputs`;
+
+    // Flash overlay
+    flashRound(state.round);
+
+    // Append to HUD log
+    logEntry(
+      `<span class="log-round">R${state.round}</span>` +
+      ` — ${blocksThisRound} block${blocksThisRound > 1 ? 's' : ''}` +
+      ` (+${inputsThisRound} inputs)`
+    );
+
+    // Auto-scroll canvas to bottom so user sees new blocks
+    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+
+    // Check completion
+    if (state.round >= CONFIG.totalRounds) {
+      finishSimulation();
+    }
+  });
+}
+
+// ================================================================
+// Scheduling: randomised intervals
+// ================================================================
+
+/**
+ * Schedule the next round with a random delay in [minInterval, maxInterval].
+ * Cancels any existing interval first.
+ */
+function scheduleRounds() {
+  // We don't use a fixed setInterval because we want per-round randomness.
+  // Instead we chain setTimeout calls.
+  if (state.done || state.paused) return;
+
+  const delay = randInt(CONFIG.minInterval, CONFIG.maxInterval);
+  state.intervalId = setTimeout(() => {
+    runRound();
+    scheduleRounds(); // chain next
+  }, delay);
+}
+
+/** Cancel pending scheduled round */
+function cancelSchedule() {
+  if (state.intervalId !== null) {
+    clearTimeout(state.intervalId);
+    state.intervalId = null;
+  }
+}
+
+// ================================================================
+// HUD: Live metrics refresh
+// ================================================================
+
+function updateHud() {
+  if (!state.startTime) return;
+
+  const elapsedSec = ((performance.now() - state.startTime) / 1000).toFixed(1);
+  const totalInputs = countDomInputs();
+  const avgInterval = state.roundIntervals.length > 0
+    ? Math.round(state.roundIntervals.reduce((a, b) => a + b, 0) / state.roundIntervals.length)
+    : '—';
+
+  mTotalInputs.textContent  = totalInputs;
+  mTotalBlocks.textContent  = state.totalBlocks;
+  mRound.textContent        = `${state.round} / ${CONFIG.totalRounds}`;
+  mElapsed.textContent      = elapsedSec + 's';
+  mAvgInterval.textContent  = avgInterval !== '—' ? avgInterval + 'ms' : '—';
+}
+
+// ================================================================
+// Finish / Summary
+// ================================================================
+
+function finishSimulation() {
+  state.done = true;
+  cancelSchedule();
+  clearInterval(state.hudIntervalId);
+
+  // Final HUD update
+  updateHud();
+  hudStatus.textContent = '🔴';
+  btnPause.disabled = true;
+  btnPause.textContent = '⏹ Done';
+
+  // Populate and show the done banner
+  const elapsed = ((performance.now() - state.startTime) / 1000).toFixed(2);
+  const totalInputs = countDomInputs();
+  const avgMs = state.roundIntervals.length > 0
+    ? Math.round(state.roundIntervals.reduce((a, b) => a + b, 0) / state.roundIntervals.length)
+    : 0;
+
+  document.getElementById('sum-blocks').textContent  = state.totalBlocks;
+  document.getElementById('sum-inputs').textContent  = totalInputs;
+  document.getElementById('sum-time').textContent    = elapsed + 's';
+  document.getElementById('sum-rounds').textContent  = state.round;
+  document.getElementById('sum-rate').textContent    = (totalInputs / state.totalBlocks).toFixed(1);
+  document.getElementById('sum-fps').textContent     = avgMs + 'ms';
+
+  doneBanner.style.display = 'block';
+  doneBanner.scrollIntoView({ behavior: 'smooth' });
+
+  logEntry('<strong style="color:#22c55e">✅ Simulation complete!</strong>');
+}
+
+// ================================================================
+// Start Simulation
+// ================================================================
+
+function startSimulation() {
+  state.round          = 0;
+  state.totalBlocks    = 0;
+  state.blockIndex     = 0;
+  state.paused         = false;
+  state.done           = false;
+  state.startTime      = performance.now();
+  state.intervalId     = null;
+  state.lastRoundMs    = 0;
+  state.roundIntervals = [];
+  state.roundLog       = [];
+
+  hudStatus.textContent     = '🟢';
+  btnPause.disabled         = false;
+  btnPause.textContent      = '⏸ Pause';
+  btnPause.classList.remove('paused');
+  doneBanner.style.display  = 'none';
+  hudLog.innerHTML          = '';
+  mThisRound.textContent    = '—';
+
+  // Start HUD refresh loop
+  clearInterval(state.hudIntervalId);
+  state.hudIntervalId = setInterval(updateHud, CONFIG.hudRefreshMs);
+
+  // Begin round scheduling
+  scheduleRounds();
+
+  logEntry('<strong style="color:#72aee6">▶ Simulation started</strong>');
+}
+
+// ================================================================
+// Controls: Pause / Resume
+// ================================================================
+
+btnPause.addEventListener('click', () => {
+  if (state.done) return;
+
+  if (state.paused) {
+    // Resume
+    state.paused = false;
+    btnPause.textContent = '⏸ Pause';
+    btnPause.classList.remove('paused');
+    hudStatus.textContent = '🟢';
+    scheduleRounds();
+    logEntry('▶ Resumed');
+  } else {
+    // Pause
+    state.paused = true;
+    cancelSchedule();
+    btnPause.textContent = '▶ Resume';
+    btnPause.classList.add('paused');
+    hudStatus.textContent = '🟡';
+    logEntry('⏸ Paused');
+  }
+});
+
+// ================================================================
+// Controls: Reset
+// ================================================================
+
+btnReset.addEventListener('click', () => {
+  // Stop everything
+  state.done   = true; // prevent runRound from firing during teardown
+  state.paused = false;
+  cancelSchedule();
+  clearInterval(state.hudIntervalId);
+
+  // Clear canvas (keep only the post title input)
+  const postTitleInput = document.getElementById('post-title');
+  canvas.innerHTML = '';
+  if (postTitleInput) {
+    canvas.appendChild(postTitleInput);
+  } else {
+    // Recreate it if somehow gone
+    const titleInput = document.createElement('input');
+    titleInput.className   = 'canvas-post-title';
+    titleInput.type        = 'text';
+    titleInput.id          = 'post-title';
+    titleInput.name        = 'post_title';
+    titleInput.value       = 'Sample Post — Gutenberg Perf Test';
+    titleInput.placeholder = 'Add title';
+    canvas.appendChild(titleInput);
+  }
+
+  logEntry('<strong style="color:#f59e0b">↺ Reset</strong>');
+
+  // Restart after a brief pause
+  setTimeout(startSimulation, 300);
+});
+
+// ================================================================
+// Sync number ↔ range inputs within blocks (nice UX touch)
+// ================================================================
+
+// Use event delegation on the canvas to sync range↔number pairs
+canvas.addEventListener('input', (e) => {
+  const el = e.target;
+  if (!el.name) return;
+
+  // If a range changed, update the sibling number (same name prefix)
+  if (el.type === 'range') {
+    const siblingId = el.id.replace('-rng', '-num');
+    const sibling = document.getElementById(siblingId);
+    if (sibling && sibling.type === 'number') sibling.value = el.value;
+  }
+  if (el.type === 'number') {
+    const siblingId = el.id.replace('-num', '-rng');
+    const sibling = document.getElementById(siblingId);
+    if (sibling && sibling.type === 'range') sibling.value = el.value;
+  }
+
+  // If a color picker changed, update the hex text field
+  if (el.type === 'color') {
+    const hexId = el.id.replace('-color', '-hex').replace('-bg-color', '-bg-hex');
+    const hexEl = document.getElementById(hexId);
+    if (hexEl) hexEl.value = el.value;
+  }
+});
+
+// ================================================================
+// Bootstrap on DOMContentLoaded
+// ================================================================
+
+document.addEventListener('DOMContentLoaded', () => {
+  startSimulation();
+});
+
+</script>
+</body>
+</html>
