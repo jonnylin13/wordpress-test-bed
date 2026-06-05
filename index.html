@@ -1175,19 +1175,23 @@ document.addEventListener('DOMContentLoaded', () => {
 // 1. MutationObserver amplifier — reacts to every mutation by
 //    triggering more mutations, creating a feedback storm.
 // ----------------------------------------------------------------
+// MO amplifier — single level only, and only reacts to every 4th mutation
+// to generate overhead without locking the thread
 let _moDepth = 0;
-const MAX_MO_DEPTH = 3; // prevent infinite recursion, but still cascade
+let _moBatchCount = 0;
 
 const chaosObserver = new MutationObserver((mutations) => {
-  if (_moDepth >= MAX_MO_DEPTH) return;
+  if (_moDepth >= 1) return;
   _moDepth++;
-  for (const m of mutations) {
-    if (m.target && m.target.nodeType === 1) {
-      // Each mutation triggers a counter-attribute flip — this re-fires the observer
-      const el = m.target;
-      const cur = parseInt(el.getAttribute('data-chaos-counter') || '0', 10);
-      el.setAttribute('data-chaos-counter', String(cur + 1));
-      el.setAttribute('data-chaos-ts', String(performance.now()));
+  _moBatchCount++;
+  // Only amplify every 4th batch to create irregular stutter rather than a freeze
+  if (_moBatchCount % 4 === 0) {
+    for (const m of mutations) {
+      if (m.target && m.target.nodeType === 1) {
+        const el = m.target;
+        const cur = parseInt(el.getAttribute('data-chaos-counter') || '0', 10);
+        el.setAttribute('data-chaos-counter', String(cur + 1));
+      }
     }
   }
   _moDepth--;
@@ -1206,7 +1210,7 @@ chaosObserver.observe(document.getElementById('editor-canvas'), {
 // 2. Core churn loop — runs every 16ms (≈60fps) and hammers every
 //    live form element in the canvas.
 // ----------------------------------------------------------------
-const CHURN_INTERVAL_MS = 16;
+const CHURN_INTERVAL_MS = 100; // was 16ms — throttle to ~10fps to slow without seizing
 
 const VALUE_POOLS = {
   text:     ['hello', 'world', 'foo@bar.com', 'test input', '12345', '', 'chaos', 'WordPress'],
@@ -1239,7 +1243,10 @@ function churnValues() {
   const inputs = canvas.querySelectorAll('input, textarea, select');
   _churnTick++;
 
-  for (let i = 0; i < inputs.length; i++) {
+  // Only churn every 3rd input per tick — enough to cause sluggishness
+  // across a large DOM without processing every element every frame
+  const stride = 3;
+  for (let i = _churnTick % stride; i < inputs.length; i += stride) {
     const el = inputs[i];
 
     // ── Value mutation ──────────────────────────────────────────
@@ -1257,14 +1264,12 @@ function churnValues() {
       if (pool) {
         const newVal = pool[(_churnTick + i) % pool.length];
         el.value = newVal != null ? String(newVal) : '';
-        // Dispatch both input and change to hit all listener patterns
         el.dispatchEvent(new Event('input',  { bubbles: true }));
         el.dispatchEvent(new Event('change', { bubbles: true }));
       }
     }
 
     // ── Attribute thrashing ─────────────────────────────────────
-    // Flip class tokens to force style recalc + MO notifications
     const classTokens = ['is-focused', 'is-dirty', 'has-value', 'is-invalid', 'chaos-active'];
     const tok = classTokens[(_churnTick + i) % classTokens.length];
     if (el.classList.contains(tok)) {
@@ -1273,43 +1278,29 @@ function churnValues() {
       el.classList.add(tok);
     }
 
-    // data-* attribute churn — cheap to write, expensive for MO subtrees
     el.setAttribute('data-tick', String(_churnTick));
-    el.setAttribute('data-index', String(i));
-    el.setAttribute('aria-label', `Field ${i} tick ${_churnTick}`);
     el.setAttribute('aria-invalid', String((_churnTick + i) % 3 === 0));
 
-    // ── Inline style thrash — forces style recalc every frame ───
-    const opacities = [1, 0.99, 0.98, 1];
-    el.style.opacity = String(opacities[(_churnTick) % opacities.length]);
+    // ── Inline style thrash — forces style recalc ───────────────
     el.style.outline = (_churnTick % 2 === 0)
-      ? '2px solid rgba(56,88,233,0.4)'
-      : '2px solid rgba(214,54,56,0.4)';
+      ? '2px solid rgba(56,88,233,0.3)'
+      : '';
 
-    // ── Forced synchronous layout read between writes ───────────
-    // offsetHeight read forces the browser to flush pending layout
-    // before continuing — maximises layout thrash.
-    if (i % 5 === 0) {
+    // ── Forced layout read — only every 15th element ────────────
+    // Enough to cause measurable layout thrash without seizing
+    if (i % 15 === 0) {
       void el.offsetHeight;
-    }
-
-    // ── Focus event storm ───────────────────────────────────────
-    if (i % 8 === 0) {
-      el.dispatchEvent(new FocusEvent('focus', { bubbles: true }));
-      el.dispatchEvent(new FocusEvent('blur',  { bubbles: true }));
     }
   }
 
-  // ── Parent block attribute thrash ───────────────────────────
+  // ── Parent block attribute thrash — every other block per tick ─
   const blocks = canvas.querySelectorAll('.wp-block');
-  for (let b = 0; b < blocks.length; b++) {
+  for (let b = _churnTick % 2; b < blocks.length; b += 2) {
     const block = blocks[b];
     block.setAttribute('data-dirty', String((_churnTick + b) % 2));
-    block.setAttribute('data-last-update', String(performance.now()));
-    // Toggle a class to force CSS re-evaluation on the whole subtree
-    block.classList.toggle('chaos-dirty', (_churnTick + b) % 3 === 0);
-    // Forced layout read on every 3rd block
-    if (b % 3 === 0) void block.getBoundingClientRect();
+    block.classList.toggle('chaos-dirty', (_churnTick + b) % 4 === 0);
+    // Forced layout read on every 8th block only
+    if (b % 8 === 0) void block.getBoundingClientRect();
   }
 
   // ── Scratch node churn — floods childList MO notifications ──
@@ -1325,23 +1316,25 @@ function churnValues() {
 // 3. Second independent observer — observes body so it catches
 //    toolbar and sidebar mutations too, amplifying further.
 // ----------------------------------------------------------------
+// Second observer scoped to canvas only (not body) — avoids amplifying
+// its own HUD writes into an infinite loop, but still adds overhead
+// from processing the canvas mutation stream a second time
+let _bodyObsBatch = 0;
 const bodyObserver = new MutationObserver((mutations) => {
-  // Simply reading mutation data creates GC pressure at scale
+  _bodyObsBatch++;
+  // Only do work every 5th batch — adds GC pressure without feedback looping
+  if (_bodyObsBatch % 5 !== 0) return;
   let attrCount = 0;
   for (const m of mutations) {
     if (m.type === 'attributes') attrCount++;
   }
-  // Write back to force another mutation cycle
   if (attrCount > 0) {
     const hud = document.getElementById('hud');
-    if (hud) {
-      hud.setAttribute('data-mo-attr-count',
-        String(parseInt(hud.getAttribute('data-mo-attr-count') || '0', 10) + attrCount));
-    }
+    if (hud) hud.setAttribute('data-mo-attr-count', String(attrCount));
   }
 });
 
-bodyObserver.observe(document.body, {
+bodyObserver.observe(document.getElementById('editor-canvas'), {
   subtree:    true,
   attributes: true,
   childList:  true,
