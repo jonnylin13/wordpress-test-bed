@@ -376,7 +376,7 @@
     </div>
     <div class="hud-row">
       <span class="hud-label">Round</span>
-      <span class="hud-value" id="m-round">0 / 50</span>
+      <span class="hud-value" id="m-round">0 / 300</span>
     </div>
     <div class="hud-row">
       <span class="hud-label">Elapsed</span>
@@ -723,6 +723,178 @@ function makeWooBlock(bi) {
 }
 
 // ----------------------------------------------------------------
+// 16. Deep Nesting Widget — inputs buried in many wrapper divs
+// ----------------------------------------------------------------
+function makeDeepNestWidget(bi) {
+  // Build 4 inputs each wrapped in 6 levels of divs
+  const deepField = (depth, id, name, type, placeholder) => {
+    let inner = `<input class="wp-input" type="${type}" id="${id}" name="${name}" placeholder="${placeholder}" />`;
+    for (let d = 0; d < depth; d++) {
+      inner = `<div class="deep-level-${d}" data-depth="${d}">${inner}</div>`;
+    }
+    return `<div class="field-group"><label class="field-label">${placeholder} (depth ${depth})</label>${inner}</div>`;
+  };
+  return makeBlock('Deep Nest', '🪆',
+    deepField(6, `block-${bi}-dn-0`, `dn_title_${bi}`,   'text',  'Nested Title') +
+    deepField(8, `block-${bi}-dn-1`, `dn_email_${bi}`,   'email', 'Nested Email') +
+    deepField(10,`block-${bi}-dn-2`, `dn_url_${bi}`,     'url',   'Nested URL') +
+    deepField(12,`block-${bi}-dn-3`, `dn_content_${bi}`, 'text',  'Nested Content') +
+    `<div class="field-group"><label class="field-label">Nested Textarea (depth 7)</label>${
+      (() => {
+        let t = `<textarea class="wp-textarea" id="block-${bi}-dn-ta" name="dn_textarea_${bi}" placeholder="Deeply nested textarea"></textarea>`;
+        for (let d = 0; d < 7; d++) t = `<div data-nest="${d}">${t}</div>`;
+        return t;
+      })()
+    }</div>`
+  );
+}
+
+// ----------------------------------------------------------------
+// 17. Fieldset / Section Block — inputs inside nested fieldsets
+// ----------------------------------------------------------------
+function makeFieldsetBlock(bi) {
+  const section = (legend, fields) =>
+    `<fieldset style="border:1px solid #c3c4c7;border-radius:3px;padding:10px 12px;margin-bottom:10px;">
+       <legend style="font-size:11px;font-weight:700;color:#3858e9;padding:0 4px;">${legend}</legend>
+       ${fields}
+     </fieldset>`;
+
+  return makeBlock('Fieldset Block', '📋',
+    section('Personal Info',
+      fieldGroup('First Name', inp('text', `block-${bi}-fs-fn`, `fs_first_${bi}`, 'First name')) +
+      fieldGroup('Last Name',  inp('text', `block-${bi}-fs-ln`, `fs_last_${bi}`,  'Last name')) +
+      fieldGroup('Birthday',   inp('date', `block-${bi}-fs-bd`, `fs_bday_${bi}`,  ''))
+    ) +
+    section('Address',
+      fieldGroup('Street',  inp('text',   `block-${bi}-fs-st`,  `fs_street_${bi}`,  '123 Main St')) +
+      fieldGroup('City',    inp('text',   `block-${bi}-fs-cy`,  `fs_city_${bi}`,    'Springfield')) +
+      fieldGroup('ZIP',     inp('text',   `block-${bi}-fs-zip`, `fs_zip_${bi}`,     '00000')) +
+      fieldGroup('Country', inp('text',   `block-${bi}-fs-co`,  `fs_country_${bi}`, 'US'))
+    ) +
+    section('Billing',
+      fieldGroup('Card Number', inp('text',   `block-${bi}-fs-cc`,  `fs_card_${bi}`,  '•••• •••• •••• ••••')) +
+      fieldGroup('Expiry',      inp('month',  `block-${bi}-fs-exp`, `fs_exp_${bi}`,   '')) +
+      fieldGroup('CVV',         inp('text',   `block-${bi}-fs-cvv`, `fs_cvv_${bi}`,   '•••'))
+    )
+  );
+}
+
+// ----------------------------------------------------------------
+// 18. Table-based Form Block — inputs inside table cells
+// ----------------------------------------------------------------
+function makeTableFormBlock(bi) {
+  const row = (label, inputHTML) =>
+    `<tr>
+       <td style="padding:5px 8px;font-size:11px;font-weight:600;color:#3c434a;white-space:nowrap;width:35%;">${label}</td>
+       <td style="padding:5px 8px;">${inputHTML}</td>
+     </tr>`;
+
+  return makeBlock('Table Form', '📊',
+    `<table style="width:100%;border-collapse:collapse;">
+       ${row('Product Name',   inp('text',   `block-${bi}-tf-name`,  `tf_name_${bi}`,  'Widget Pro'))}
+       ${row('SKU / Barcode',  inp('text',   `block-${bi}-tf-sku`,   `tf_sku_${bi}`,   'WP-0001'))}
+       ${row('Category',       inp('text',   `block-${bi}-tf-cat`,   `tf_cat_${bi}`,   'Electronics'))}
+       ${row('List Price',     inp('number', `block-${bi}-tf-price`, `tf_price_${bi}`, '0.00', '0.00', 'step="0.01"'))}
+       ${row('Sale Price',     inp('number', `block-${bi}-tf-sale`,  `tf_sale_${bi}`,  '0.00', '0.00', 'step="0.01"'))}
+       ${row('Stock',          inp('number', `block-${bi}-tf-stock`, `tf_stock_${bi}`, '0', '0'))}
+       ${row('Tags',           inp('text',   `block-${bi}-tf-tags`,  `tf_tags_${bi}`,  'tag1, tag2'))}
+       ${row('Notes',          `<textarea class="wp-textarea" id="block-${bi}-tf-notes" name="tf_notes_${bi}" placeholder="Internal notes" style="min-height:50px;"></textarea>`)}
+     </table>`
+  );
+}
+
+// ----------------------------------------------------------------
+// 19. Accordion / Collapsible Block — multiple panels with inputs
+// ----------------------------------------------------------------
+function makeAccordionBlock(bi) {
+  const panel = (title, fields) =>
+    `<details style="border:1px solid #e0e0e0;border-radius:3px;margin-bottom:6px;" open>
+       <summary style="padding:7px 10px;cursor:pointer;font-size:12px;font-weight:600;color:#3c434a;background:#f6f7f7;">${title}</summary>
+       <div style="padding:10px 12px;">${fields}</div>
+     </details>`;
+
+  return makeBlock('Accordion Form', '🪗',
+    panel('Basic Info',
+      fieldGroup('Title',    inp('text',  `block-${bi}-ac-title`, `ac_title_${bi}`,   'Enter title')) +
+      fieldGroup('Subtitle', inp('text',  `block-${bi}-ac-sub`,   `ac_sub_${bi}`,     'Enter subtitle')) +
+      fieldGroup('Slug',     inp('text',  `block-${bi}-ac-slug`,  `ac_slug_${bi}`,    'my-post-slug'))
+    ) +
+    panel('Media',
+      fieldGroup('Hero Image URL', inp('url',  `block-${bi}-ac-hero`,  `ac_hero_${bi}`,   'https://')) +
+      fieldGroup('Thumbnail URL',  inp('url',  `block-${bi}-ac-thumb`, `ac_thumb_${bi}`,  'https://')) +
+      fieldGroup('Alt Text',       inp('text', `block-${bi}-ac-alt`,   `ac_alt_${bi}`,    'Describe the image'))
+    ) +
+    panel('SEO & Social',
+      fieldGroup('OG Title',       inp('text', `block-${bi}-ac-og`,    `ac_og_${bi}`,    'OG title')) +
+      fieldGroup('Twitter Card',   inp('text', `block-${bi}-ac-tw`,    `ac_tw_${bi}`,    '@handle')) +
+      fieldGroup('Schema Type',    inp('text', `block-${bi}-ac-sc`,    `ac_sc_${bi}`,    'Article'))
+    ) +
+    panel('Advanced',
+      fieldGroup('Custom Class',  inp('text',  `block-${bi}-ac-cls`,  `ac_class_${bi}`,  'wp-block-custom')) +
+      fieldGroup('Anchor ID',     inp('text',  `block-${bi}-ac-anc`,  `ac_anchor_${bi}`, 'section-id')) +
+      fieldGroup('Custom CSS',    `<textarea class="wp-textarea" id="block-${bi}-ac-css" name="ac_css_${bi}" placeholder=".my-class { color: red; }" style="min-height:50px;font-family:monospace;font-size:11px;"></textarea>`)
+    )
+  );
+}
+
+// ----------------------------------------------------------------
+// 20. Multi-step / Wizard Block — tabbed sections with inputs
+// ----------------------------------------------------------------
+function makeWizardBlock(bi) {
+  // Not truly interactive tabs — just renders all steps visible for DOM density
+  const step = (num, title, fields) =>
+    `<div style="border-left:3px solid #3858e9;padding:8px 12px;margin-bottom:10px;">
+       <div style="font-size:11px;font-weight:700;color:#3858e9;margin-bottom:8px;">Step ${num}: ${title}</div>
+       ${fields}
+     </div>`;
+
+  return makeBlock('Wizard Block', '🧙',
+    step(1, 'Account',
+      fieldGroup('Username',  inp('text',     `block-${bi}-wz-user`,  `wz_user_${bi}`,  'johndoe')) +
+      fieldGroup('Email',     inp('email',    `block-${bi}-wz-email`, `wz_email_${bi}`, 'john@example.com')) +
+      fieldGroup('Password',  inp('password', `block-${bi}-wz-pass`,  `wz_pass_${bi}`,  '••••••••'))
+    ) +
+    step(2, 'Profile',
+      fieldGroup('Display Name', inp('text',   `block-${bi}-wz-disp`, `wz_disp_${bi}`, 'John Doe')) +
+      fieldGroup('Bio',          `<textarea class="wp-textarea" id="block-${bi}-wz-bio" name="wz_bio_${bi}" placeholder="Short bio…" style="min-height:50px;"></textarea>`) +
+      fieldGroup('Website',      inp('url',   `block-${bi}-wz-web`,  `wz_web_${bi}`,  'https://'))
+    ) +
+    step(3, 'Preferences',
+      fieldGroup('Language',    inp('text',   `block-${bi}-wz-lang`, `wz_lang_${bi}`, 'en-US')) +
+      fieldGroup('Timezone',    inp('text',   `block-${bi}-wz-tz`,   `wz_tz_${bi}`,   'UTC')) +
+      fieldGroup('Notify Email', inp('email', `block-${bi}-wz-ne`,   `wz_ne_${bi}`,   'alerts@example.com'))
+    ) +
+    step(4, 'Review',
+      fieldGroup('Promo Code',  inp('text',   `block-${bi}-wz-promo`,`wz_promo_${bi}`,'SAVE20')) +
+      fieldGroup('Notes',       `<textarea class="wp-textarea" id="block-${bi}-wz-note" name="wz_note_${bi}" placeholder="Final notes…" style="min-height:40px;"></textarea>`)
+    )
+  );
+}
+
+// ----------------------------------------------------------------
+// 21. Mega Repeater Block — many rows, many columns
+// ----------------------------------------------------------------
+function makeMegaRepeaterBlock(bi) {
+  const rows = 4 + (bi % 4); // 4–7 rows
+  let rowsHTML = '';
+  for (let r = 0; r < rows; r++) {
+    rowsHTML += `<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;padding:6px;background:#f6f7f7;border-radius:3px;margin-bottom:4px;border:1px solid #e0e0e0;">
+      ${inp('text',   `block-${bi}-mr-${r}-name`,  `mr_name_${bi}_${r}`,  'Name')}
+      ${inp('email',  `block-${bi}-mr-${r}-email`, `mr_email_${bi}_${r}`, 'Email')}
+      ${inp('url',    `block-${bi}-mr-${r}-url`,   `mr_url_${bi}_${r}`,   'URL')}
+      ${inp('number', `block-${bi}-mr-${r}-qty`,   `mr_qty_${bi}_${r}`,   'Qty', '1')}
+      <input class="wp-input" type="checkbox" id="block-${bi}-mr-${r}-active" name="mr_active_${bi}_${r}" title="Active" style="width:auto;justify-self:center;margin-top:4px;" />
+    </div>`;
+  }
+  return makeBlock('Mega Repeater', '📋',
+    `<div class="field-group">
+       <label class="field-label">Bulk Entry (${rows} rows × 5 fields = ${rows * 5} inputs)</label>
+       ${rowsHTML}
+     </div>`
+  );
+}
+
+// ----------------------------------------------------------------
 // Block type registry — maps type index → generator function
 // ----------------------------------------------------------------
 const BLOCK_GENERATORS = [
@@ -741,6 +913,12 @@ const BLOCK_GENERATORS = [
   makeRepeaterBlock,     // 12
   makeContactFormBlock,  // 13
   makeWooBlock,          // 14
+  makeDeepNestWidget,    // 15
+  makeFieldsetBlock,     // 16
+  makeTableFormBlock,    // 17
+  makeAccordionBlock,    // 18
+  makeWizardBlock,       // 19
+  makeMegaRepeaterBlock, // 20
 ];
 
 /**
@@ -775,11 +953,11 @@ function createRandomBlock(blockIndex, forceType) {
 // Configuration (edit these to tune the test)
 // ================================================================
 const CONFIG = {
-  totalRounds:   50,     // How many injection rounds to run
-  minInterval:   300,    // Minimum ms between rounds
-  maxInterval:   600,    // Maximum ms between rounds
-  minBlocks:     1,      // Min blocks per round
-  maxBlocks:     4,      // Max blocks per round
+  totalRounds:   300,    // How many injection rounds to run
+  minInterval:   150,    // Minimum ms between rounds
+  maxInterval:   350,    // Maximum ms between rounds
+  minBlocks:     2,      // Min blocks per round
+  maxBlocks:     7,      // Max blocks per round
   hudRefreshMs:  200,    // HUD stats refresh interval (ms)
   flashDuration: 500,    // Round flash overlay duration (ms)
 };
@@ -1199,6 +1377,7 @@ document.addEventListener('DOMContentLoaded', () => {
 <div id="chaos-panel">
   <h3>Chaos Engine</h3>
   <label><input type="checkbox" id="chaos-value-churn"> Value churn</label>
+  <label><input type="checkbox" id="chaos-random-events"> Random input events</label>
   <label><input type="checkbox" id="chaos-attr-thrash"> Attribute thrashing</label>
   <label><input type="checkbox" id="chaos-style-thrash"> Inline style thrash</label>
   <label><input type="checkbox" id="chaos-layout-reads"> Forced layout reads</label>
@@ -1236,6 +1415,7 @@ function getPool(el) {
 // ── Feature flags (read from checkboxes) ──────────────────────────
 const flags = {
   valueChurn:    () => document.getElementById('chaos-value-churn').checked,
+  randomEvents:  () => document.getElementById('chaos-random-events').checked,
   attrThrash:    () => document.getElementById('chaos-attr-thrash').checked,
   styleThrash:   () => document.getElementById('chaos-style-thrash').checked,
   layoutReads:   () => document.getElementById('chaos-layout-reads').checked,
@@ -1245,8 +1425,8 @@ const flags = {
 };
 
 function anyChurnActive() {
-  return flags.valueChurn() || flags.attrThrash() || flags.styleThrash() ||
-         flags.layoutReads() || flags.scratchNodes();
+  return flags.valueChurn() || flags.randomEvents() || flags.attrThrash() ||
+         flags.styleThrash() || flags.layoutReads() || flags.scratchNodes();
 }
 
 // ── Interval management ───────────────────────────────────────────
@@ -1263,6 +1443,92 @@ function stopIntervalIfIdle() {
   if (_churnInterval && !anyChurnActive()) {
     clearInterval(_churnInterval);
     _churnInterval = null;
+  }
+}
+
+// ── Random input events ───────────────────────────────────────────
+// Fires realistic input/keyup/paste/change events on random elements
+// at a high rate to stress the form-input-detector listener pipeline.
+
+const RANDOM_EVENTS_INTERVAL_MS = 80;
+let _randomEventsInterval = null;
+let _randomEventTick = 0;
+
+const KEY_SAMPLES = [
+  { key: 'a', code: 'KeyA', keyCode: 65 },
+  { key: 'e', code: 'KeyE', keyCode: 69 },
+  { key: 's', code: 'KeyS', keyCode: 83 },
+  { key: 't', code: 'KeyT', keyCode: 84 },
+  { key: ' ', code: 'Space', keyCode: 32 },
+  { key: 'Backspace', code: 'Backspace', keyCode: 8 },
+];
+
+const TEXT_SNIPPETS = [
+  'hello world', 'test@example.com', 'https://example.com',
+  'Lorem ipsum dolor', 'chaos injection', '12345', '',
+  'deep nested value', 'form detector stress',
+];
+
+function fireRandomInputEvents() {
+  if (!flags.randomEvents()) return;
+
+  const canvas = document.getElementById('editor-canvas');
+  if (!canvas) return;
+
+  _randomEventTick++;
+  const t = _randomEventTick;
+
+  // Grab all typeable inputs (exclude hidden/checkbox/radio/range/color/date/time/file)
+  const typeable = canvas.querySelectorAll(
+    'input[type="text"], input[type="email"], input[type="url"], input[type="tel"], ' +
+    'input[type="number"], input[type="password"], input[type="search"], textarea'
+  );
+
+  if (typeable.length === 0) return;
+
+  // Fire on 5 random elements per tick to keep pressure high without locking the thread
+  const batchSize = Math.min(5, typeable.length);
+  for (let b = 0; b < batchSize; b++) {
+    const idx = Math.floor(Math.random() * typeable.length);
+    const el = typeable[idx];
+
+    // Randomly assign a text snippet to simulate typed content
+    if (Math.random() < 0.4) {
+      el.value = TEXT_SNIPPETS[t % TEXT_SNIPPETS.length];
+    }
+
+    // Dispatch keyup (what form-input-detector listens to)
+    const keySample = KEY_SAMPLES[t % KEY_SAMPLES.length];
+    el.dispatchEvent(new KeyboardEvent('keyup', {
+      key: keySample.key,
+      code: keySample.code,
+      keyCode: keySample.keyCode,
+      bubbles: true,
+      cancelable: true,
+    }));
+
+    // Occasionally also fire a paste event
+    if (Math.random() < 0.15) {
+      el.dispatchEvent(new Event('paste', { bubbles: true }));
+    }
+
+    // Occasionally fire an input event
+    if (Math.random() < 0.3) {
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  }
+}
+
+function startRandomEventsIfNeeded() {
+  if (!_randomEventsInterval && flags.randomEvents()) {
+    _randomEventsInterval = setInterval(fireRandomInputEvents, RANDOM_EVENTS_INTERVAL_MS);
+  }
+}
+
+function stopRandomEventsIfIdle() {
+  if (_randomEventsInterval && !flags.randomEvents()) {
+    clearInterval(_randomEventsInterval);
+    _randomEventsInterval = null;
   }
 }
 
@@ -1408,6 +1674,14 @@ document.addEventListener('DOMContentLoaded', () => {
       stopIntervalIfIdle();
     });
   }
+
+  document.getElementById('chaos-random-events').addEventListener('change', () => {
+    startRandomEventsIfNeeded();
+    stopRandomEventsIfIdle();
+    // Also keep the main churn interval accurate
+    startIntervalIfNeeded();
+    stopIntervalIfIdle();
+  });
 });
 </script>
 </body>
